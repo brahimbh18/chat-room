@@ -3,72 +3,57 @@
 #include <sys/socket.h> // For socket functions
 #include <netinet/in.h> // For sockaddr_in structure 
 #include <unistd.h>     // For close function
+#include <arpa/inet.h>
+#include <thread>
+
 
 using namespace std;
 
+void receiveMessage(int socket) {
+    char buffer[1024] = {0};
+    while (true) {
+        memset(buffer, 0, sizeof(buffer));
+        int valread = recv(socket, buffer, 1024, 0);
+        if (valread > 0) {
+            std::cout << "Received: " << buffer << std::endl; }
+    }
+}
+
 int main() {
-    // Create a socket
-    int client_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (client_socket == -1) {
-        perror("Socket failed");
+    int sock = 0;
+    struct sockaddr_in serv_addr;
+    char buffer[1024] = {0};
+
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        cout << "er";
         return -1;
     }
 
-    // Server address setup
-    sockaddr_in server_addr{};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(8080);
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(8080);
 
-    // Connect to the server
-    if (connect(client_socket, (struct sockaddr*) &server_addr, sizeof(server_addr)) == -1) {
-        perror("Connection failed");
+    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
+        std::cout << "Invalid address / Address not supported\n";
         return -1;
     }
-    cout << "✅ Connected to server!\n";
 
-    char buffer[1024];
-
-    // Receive the welcome message from the server
-    memset(buffer, 0, sizeof(buffer));
-    int bytes_received = recv(client_socket, buffer, sizeof(buffer) -1, 0);
-    
-    if (bytes_received > 0) {
-        buffer[bytes_received] = '\0'; 
-        cout << "📩 Server: " << buffer << endl;
+    if (connect(sock, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
+        cout << "conn failed";
+        return -1;
     }
-    
+
+    thread recvThread(receiveMessage, sock);
 
     while (true) {
-        cout << "You: ";
-        string user_input;
-        getline(cin, user_input);
-
-        // Send message to server
-        send(client_socket, user_input.c_str(), user_input.size(), 0);
-
-        // Check if the user wants to exit
-        if (user_input == "exit") {
-            cout << "🔌 Disconnecting from server...\n";
-            break;
-        }
-
-        // Receive server response
-        memset(buffer, 0, sizeof(buffer));
-        bytes_received = recv(client_socket, buffer, sizeof(buffer) -1, 0);
-        if (bytes_received > 0) {
-            buffer[bytes_received] = '\0';
-            cout << "📨 Server: " << buffer << endl;
-        } else if (bytes_received == 0) {
-            cout << "❌ Server closed the connection\n";
-            break;
-        } else {
-            perror("Receive failed");
-            break;
-        }
+        string message;
+        getline(cin, message);
+        send(sock, message.c_str(), message.size(), 0);
     }
 
-    // Close the socket
-    close(client_socket);
+    recvThread.join();
+    close(sock);
+
     return 0;
 }

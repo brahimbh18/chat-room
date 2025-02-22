@@ -13,8 +13,8 @@ using namespace std;
 
 int server_socket;
 vector<int> client_sockets;
-char buffer[1024];
-void handle_client(int client_socket);
+// char buffer[1024];
+void handle_client(int client1, int client2);
 void send_to_all_clients(char buffer[1024], int clients_socket);
 void handle_signal(int signal);
 
@@ -55,59 +55,39 @@ int main() {
 
     cout << "🎧 Server is now listening for connections...\n";
 
-    while (true) {
-        sockaddr_in client_addr{};
-        socklen_t client_size = sizeof(client_addr);
+    sockaddr_in client_addr{};
+    socklen_t client_size = sizeof(client_addr);
 
-        // Accept new client connection
-        int client_socket = accept(server_socket, (struct sockaddr*) &client_addr, &client_size);
-        if (client_socket == -1) {
-            perror("Accept failed");
-            continue; // Keep listening for new clients
-        }
+    int client1 = accept(server_socket, (struct sockaddr*) &client_addr, (socklen_t*)&client_size);
+    cout << "Client 1 connected.\n";
 
-        client_sockets.push_back(client_socket);
-        thread client(handle_client, client_socket);
-        client.detach();
+    int client2 = accept(server_socket, (struct sockaddr*) &client_addr, (socklen_t*)&client_size);
+    cout << "Client 2 connected.\n";
+    
+    thread t1 (handle_client, client1, client2);
+    thread t2 (handle_client, client2, client1);
 
-        // Close the server
-    }
+    t1.join();
+    t2.join();
+
     close(server_socket);
 
     return 0;
 }
 
-void handle_client(int client_socket) {
-    cout << "✅ Client connected!\n";
-
-    // Send welcome message
-    const char* message = "Welcome to the server!\n";
-    send(client_socket, message, strlen(message), 0);
-    cout << "📩 Sent message to client: " << message << endl;
-
-    // Handle communication with the client
-    while (true) {
+void handle_client(int client1, int client2) {
+    char buffer[1024] = {0};
+    while (true)  {
         memset(buffer, 0, sizeof(buffer));
-
-        // Receive data
-        int bytes_received = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
-        if (bytes_received > 0) {
-            buffer[bytes_received] = '\0'; // Ensure null-terminated string
-            cout << "->";
-            send_to_all_clients(buffer, client_socket);
-            // send(client_socket, buffer, strlen(buffer), 0);
-        } else if (bytes_received == 0) {
-            client_sockets.erase(std::remove(client_sockets.begin(), client_sockets.end(), client_socket), client_sockets.end());
-            cout << "❌ Client disconnected\n";
-            break;
-        } else {
-            perror("Receive failed");
-            break;
+        int valread = recv(client1, buffer, 1024, 0);
+        if (valread <= 0) {
+            cout << "client disconnected\n";
         }
+        // cout << "message : " << buffer;
+        send(client2, buffer, 1024, 0);
     }
-
-    // Close the client socket
-    close(client_socket);
+    close(client1);
+    close(client2);
     cout << "🔒 Connection closed with client\n";
 
 }
